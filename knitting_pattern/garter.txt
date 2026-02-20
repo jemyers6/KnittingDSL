@@ -1,0 +1,18 @@
+stitch garter = K 1;
+
+pattern bordered_square(size, border) {
+    cast_on size;
+    repeat border {
+        garter * (size * (1 + 1 - 1));
+    }
+    repeat size - (border * 2) {
+        K border, garter * (width + 1 * (border - 2)), K border;
+    }
+    repeat border {
+        garter * size;
+    }
+
+    bind_off size;
+}
+
+execute(bordered_square(40, 5));

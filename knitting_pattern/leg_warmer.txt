@@ -1,0 +1,26 @@
+stitch rib1x1 = K 1, P 1, K 1;
+pattern cuff(width){
+    repeat 15 {
+        rib1x1 fill;
+    }
+}
+
+pattern leg(width){
+   repeat 70 {
+        K 1 fill;
+    }
+}
+
+pattern legwarmer(width) {
+    print("using circular needles");
+    cast_on width;
+    work(cuff(width));
+    print("switch to main yarn");
+    K 1 fill;  
+    work(leg(width));
+    print("switch to cuff yarn");
+    work(cuff(width));
+    bind_off width;
+}
+
+execute(legwarmer(63));

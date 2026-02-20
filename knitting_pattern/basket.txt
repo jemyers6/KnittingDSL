@@ -1,0 +1,17 @@
+stitch yo_leaf = K 2, M1L 1, K 3, M1R 1, K 2;
+stitch leaf_dec = K 1, SSK 1, K 3, K2TOG 1, K 1;
+
+pattern lace_panel(width, repeats) {
+    cast_on width;
+    repeat repeats {
+        repeat 2 {
+            K 4, (yo_leaf) * 3, K 4;
+        }
+        repeat 2 {
+            K 4, (leaf_dec) * 3, K 4;
+        }
+    }
+    bind_off width;
+}
+
+execute(lace_panel(36, 10));
