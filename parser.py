@@ -3,6 +3,7 @@ from lexer import Lexer, Token, TokenType
 import sys
 from dataclasses import dataclass, field
 from typing import List, Optional
+from parser_models import Expr, Num, ParenMotif, Var, BinOp, Motif, StitchMotif, RefMotif, Element, Statement, RowStatement
 
 class Parser:
     def __init__(self, lexer: Lexer):
@@ -160,11 +161,13 @@ class Parser:
         self.parse_pattern_body()
         self.expect(TokenType.RCBRAC)
 
-    def parse_row_stmt(self):
+    def parse_row_stmt(self) -> RowStatement:
         # row_stmt → motif_line_list fill_opt SEMICOLON
-        self.parse_motif_line_list()
-        self.parse_fill_opt()
+        row_stmt = RowStatement()
+        row_stmt.elements = self.parse_motif_line_list()
+        row_stmt.fill = self.parse_fill_opt()
         self.expect(TokenType.SEMICOLON)
+        return row_stmt
     
     def parse_print_stmt(self):
         # print_stmt → PRINT LPAREN QUOTED_STRING RPAREN SEMICOLON
@@ -182,13 +185,14 @@ class Parser:
         self.expect(TokenType.RPAREN)
         self.expect(TokenType.SEMICOLON)
     
-    def parse_fill_opt(self):
+    def parse_fill_opt(self) -> bool:
         # fill_opt → fill | epsilon
         t = self.lexer.peek(1)
         if t.token_type == TokenType.FILL:
             self.expect(TokenType.FILL)
+            return True
         elif t.token_type == TokenType.SEMICOLON:
-            return
+            return False
         else:
             self.syntax_error()
     
@@ -232,26 +236,29 @@ class Parser:
         else:
             self.syntax_error()
     
-    def parse_motif_line_list(self):
+    def parse_motif_line_list(self) -> List[Element]:
         # motif_line_list → element motif_line
-        self.parse_element()
-        self.parse_motif_line()
+        elements: List[Element] = []
+        elements.append(self.parse_element())
+        self.parse_motif_line(elements)
+        return elements
 
-    def parse_motif_line(self):
+    def parse_motif_line(self, elements: List[Element]):
         # motif_line → COMMA element motif_line | epsilon
         t = self.lexer.peek(1)
         if t.token_type == TokenType.COMMA:
             self.expect(TokenType.COMMA)
-            self.parse_element()
-            self.parse_motif_line()
+            elements.append(self.parse_element())
+            self.parse_motif_line(elements)
         elif t.token_type in {TokenType.SEMICOLON, TokenType.RPAREN, TokenType.FILL}:
             return
         else:
             self.syntax_error()
     
-    def parse_element(self):
+    def parse_element(self) -> Element:
         # element → stitch_count | base_motif motif_repeat
         t = self.lexer.peek(1)
+
         if t.token_type in {TokenType.KNIT, 
                             TokenType.PURL, 
                             TokenType.KFB, 
@@ -259,28 +266,31 @@ class Parser:
                             TokenType.M1R, 
                             TokenType.SSK, 
                             TokenType.K2TOG}:
-            self.parse_stitch_count()
-        elif t.token_type == TokenType.ID or t.token_type == TokenType.LPAREN:
-            self.parse_base_motif()
-            self.parse_motif_repeat()
-        elif t.token_type in {TokenType.SEMICOLON, TokenType.RPAREN, TokenType.FILL}:
-            return
+            return self.parse_stitch_count()
+
+        elif t.token_type in {TokenType.ID, TokenType.LPAREN}:
+            motif = self.parse_base_motif()          # returns Motif
+            repeat = self.parse_motif_repeat()       # returns Expr (default Num(1))
+            return Element(motif=motif, repeat=repeat)
+
         else:
             self.syntax_error()
 
 
-    def parse_stitch_count(self):
+    def parse_stitch_count(self) -> Element:
         # stitch_count → stitch_operator expr | stitch_operator LBRAC expr RBRAC
-        self.parse_stitch_operator()
-        t = self.lexer.peek(1)
-        if t.token_type == TokenType.LBRAC:
+        motif = self.parse_stitch_operator()
+
+        if self.lexer.peek(1).token_type == TokenType.LBRAC:
             self.expect(TokenType.LBRAC)
-            self.parse_expr()
+            repeat = self.parse_expr()
             self.expect(TokenType.RBRAC)
         else:
-            self.parse_expr()
+            repeat = self.parse_expr()
+
+        return Element(motif=motif, repeat=repeat)
     
-    def parse_stitch_operator(self):
+    def parse_stitch_operator(self) -> StitchMotif:
         # stitch_operator → KNIT | PURL | KFB | M1L | M1R | SSK | K2TOG
         t = self.lexer.get_token()
         if t.token_type not in {TokenType.KNIT, 
@@ -291,97 +301,106 @@ class Parser:
                                 TokenType.SSK, 
                                 TokenType.K2TOG}:
             self.syntax_error()
+        return StitchMotif(t.lexeme)
     
-    def parse_base_motif(self):
+    def parse_base_motif(self) -> Motif:
         # base_motif → motif_ref | paren_motif 
+        motif = Motif()
         t = self.lexer.peek(1)
         if t.token_type == TokenType.ID:
-            self.parse_motif_ref()
+            motif = self.parse_motif_ref()
         elif t.token_type == TokenType.LPAREN:
-            self.parse_paren_motif()
+            motif = self.parse_paren_motif()
         else:
             self.syntax_error()
+        return motif
     
-    def parse_motif_ref(self):
+    def parse_motif_ref(self) -> RefMotif:
         # motif_ref → ID // references user defined stitch
-        self.expect(TokenType.ID)
+        t = self.lexer.get_token()
+        if t.token_type != TokenType.ID:
+            self.syntax_error()
+        return RefMotif(t.lexeme)
     
-    def parse_paren_motif(self):
+    def parse_paren_motif(self) -> ParenMotif:
         # paren_motif → LPAREN motif_line_list RPAREN
+        parenMotif = ParenMotif(elements=[])
         self.expect(TokenType.LPAREN)
-        self.parse_motif_line_list()
+        parenMotif.elements = self.parse_motif_line_list()
         self.expect(TokenType.RPAREN)
+        return parenMotif
     
-    def parse_motif_repeat(self):
+    def parse_motif_repeat(self) -> Optional[Expr]:
         # motif_repeat → MULT repeat_count | epsilon
         t = self.lexer.peek(1)
         if t.token_type == TokenType.MULT:
             self.expect(TokenType.MULT)
-            self.repeat_count()
+            return self.repeat_count()
         elif t.token_type in {TokenType.COMMA,
                               TokenType.RPAREN, 
                               TokenType.SEMICOLON, 
                               TokenType.FILL}:
-            return
+            return Num(1)  # default repeat count is 1
         else:
             self.syntax_error()
 
-    def repeat_count(self):
+    def repeat_count(self) -> Expr:
         # motif_repeat → MULT repeat_count | epsilon
         #repeat_count → NUM | ID | LPAREN expr RPAREN
         t = self.lexer.peek(1)
+
         if t.token_type == TokenType.NUM:
-            self.expect(TokenType.NUM)
+            tok = self.expect(TokenType.NUM)
+            return Num(int(tok.lexeme))
+
         elif t.token_type == TokenType.ID:
-            self.expect(TokenType.ID)
+            tok = self.expect(TokenType.ID)
+            return Var(tok.lexeme)
+
         elif t.token_type == TokenType.LPAREN:
             self.expect(TokenType.LPAREN)
-            self.parse_expr()
+            e = self.parse_expr()     # full expr allowed only if parenthesized
             self.expect(TokenType.RPAREN)
+            return e
+
         else:
             self.syntax_error()
 
-    def parse_expr(self):
+    def parse_expr(self) -> Expr:
         # expr → term expr_tail
-        self.parse_term()
-        self.parse_expr_tail()
+        left = self.parse_term()
+        return self.parse_expr_tail(left)
     
-    def parse_term(self):
+    def parse_term(self) -> Expr:
         # term → factor term_tail
-        self.parse_factor()
-        self.parse_term_tail()
+        left = self.parse_factor()
+        return self.parse_term_tail(left)
 
 
-    def parse_factor(self):
+    def parse_factor(self) -> Expr:
         # factor → NUM | stitch_operator | ID | LPAREN expr RPAREN
         # might remove stitch_operator
         t = self.lexer.peek(1)
         if t.token_type == TokenType.NUM:
-            self.expect(TokenType.NUM)
-        elif t.token_type in {TokenType.KNIT, 
-                              TokenType.PURL, 
-                              TokenType.KFB, 
-                              TokenType.M1L, 
-                              TokenType.M1R, 
-                              TokenType.SSK, 
-                              TokenType.K2TOG}:
-            self.parse_stitch_operator()
+            return Num(int(self.expect(TokenType.NUM).lexeme))
         elif t.token_type == TokenType.ID:
-            self.expect(TokenType.ID)
+            return Var(self.expect(TokenType.ID).lexeme)
         elif t.token_type == TokenType.LPAREN:
             self.expect(TokenType.LPAREN)
-            self.parse_expr()
+            expr = self.parse_expr()
             self.expect(TokenType.RPAREN)
+            return expr
         else:
             self.syntax_error()
     
-    def parse_expr_tail(self):
+    def parse_expr_tail(self, left: Expr) -> Expr:
         # expr_tail → add_operator term expr_tail | epsilon
         t = self.lexer.peek(1)
         if t.token_type in {TokenType.PLUS, TokenType.MINUS}:
-            self.parse_add_operator()
-            self.parse_term()
-            self.parse_expr_tail()
+            op = self.parse_add_operator()     # "+" or "-"
+            right = self.parse_term()
+            combined = BinOp(op, left, right)
+            return self.parse_expr_tail(combined)
         elif t.token_type in {
             TokenType.SEMICOLON,
             TokenType.COMMA,
@@ -390,34 +409,43 @@ class Parser:
             TokenType.RBRAC,   # <-- needed for stitch_operator [ expr ]
             TokenType.FILL,    # <-- row_stmt: ... fill ;
         }:
-            return
+            return left
         else:
             self.syntax_error()
 
-    def parse_term_tail(self):
+    def parse_term_tail(self, left: Expr) -> Expr:
         # term_tail → MULT factor | epsilon
         t = self.lexer.peek(1)
+
         if t.token_type == TokenType.MULT:
             self.expect(TokenType.MULT)
-            self.parse_factor()
+            right = self.parse_factor()
+            combined = BinOp("*", left, right)
+            return self.parse_term_tail(combined)  # recurse to allow a*b*c
+
         elif t.token_type in {
             TokenType.SEMICOLON,
             TokenType.COMMA,
             TokenType.RPAREN,
-            TokenType.LCBRAC,  # <-- needed for repeat expr {
-            TokenType.RBRAC,   # <-- needed for stitch_operator [ expr ]
-            TokenType.FILL,    # <-- row_stmt: ... fill ;
-            TokenType.PLUS, TokenType.MINUS
+            TokenType.LCBRAC,
+            TokenType.RBRAC,
+            TokenType.FILL,
+            TokenType.PLUS,
+            TokenType.MINUS,
         }:
-            return
+            return left
+
         else:
             self.syntax_error()
     
-    def parse_add_operator(self):
+    def parse_add_operator(self) -> str:
         # add_operator → PLUS | MINUS
         t = self.lexer.get_token()
-        if t.token_type not in {TokenType.PLUS, TokenType.MINUS}:
-            self.syntax_error()
+        if t.token_type == TokenType.PLUS:
+            return "+"
+        if t.token_type == TokenType.MINUS:
+            return "-"
+        self.syntax_error()
     
 
 
