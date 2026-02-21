@@ -84,12 +84,11 @@ class PrintStmt(Statement):
     message: str
 
 
-
 # Pattern and Stitch Definitions
 @dataclass(frozen=True)
 class Pattern:
     name: str
-    params: List[str]             
+    params: Optional[List[str]]         
     statements: List[Statement]   
 
 @dataclass(frozen=True)
@@ -102,12 +101,10 @@ class StitchDef:
 @dataclass(frozen=True)
 class PatternCall:
     name: str
-    args: List["Expr"]              
-
+    args: Optional[List[str]]          
 
 @dataclass(frozen=True)
 class Program:
-    stitch_defs: Dict[str, StitchDef]
-    patterns: Dict[str, Pattern]
+    stitch_defs: List[StitchDef]
+    patterns: List[Pattern]
     entry: PatternCall               
-    global_width: Optional[int] = None

@@ -1,13 +1,15 @@
 from __future__ import annotations
+from ast import pattern
 from lexer import Lexer, Token, TokenType
 import sys
 from dataclasses import dataclass, field
 from typing import List, Optional
-from parser_models import Expr, Num, ParenMotif, Var, BinOp, Motif, StitchMotif, RefMotif, Element, Statement, RowStatement
+from parser_models import *
 
 class Parser:
     def __init__(self, lexer: Lexer):
         self.lexer = lexer
+        self.global_width = 0
 
     def syntax_error(self):
         print("SYNTAX ERROR")
@@ -23,79 +25,88 @@ class Parser:
         self.parse_program()
         self.expect(TokenType.EOF)
 
-    def parse_program(self):
+    def parse_program(self) -> Program:
         # program  → stitch_def_list pattern_list execute_stmt
-        self.parse_stitch_def_list()
-        self.parse_pattern_list()
-        self.parse_execute_stmt()
+        stitchDefs: List[StitchDef] = []
+        stitch_defs = self.parse_stitch_def_list(stitchDefs)
+        patterns: List[Pattern] = []
+        patterns = self.parse_pattern_list(patterns)
+        entry = self.parse_execute_stmt()
+        return Program(stitch_defs, patterns, entry)
 
 
-    def parse_stitch_def_list(self):
+    def parse_stitch_def_list(self, stitchDefs: List[StitchDef]) -> List[StitchDef]:
         # stitch_def_list → stitch_def stitch_def_list | epsilon
         t = self.lexer.peek(1)
         if t.token_type == TokenType.STITCH:
-            self.parse_stitch_def()
-            self.parse_stitch_def_list()
+            stitchDefs.append(self.parse_stitch_def())
+            return self.parse_stitch_def_list(stitchDefs)
         elif t.token_type in {TokenType.PATTERN, TokenType.EXECUTE}:
-            return
+            return stitchDefs
         else:
             self.syntax_error()
     
-    def parse_stitch_def(self):
+    def parse_stitch_def(self) -> StitchDef:
         # stitch_def → STITCH ID EQUALS motif_line_list SEMICOLON 
         self.expect(TokenType.STITCH)
-        self.expect(TokenType.ID)
+        name = self.expect(TokenType.ID).lexeme
         self.expect(TokenType.EQUALS)
-        self.parse_motif_line_list()
+        elements = self.parse_motif_line_list()
         self.expect(TokenType.SEMICOLON)
+        return StitchDef(name, elements)
     
-    def parse_pattern_list(self):
+    def parse_pattern_list(self, patterns: List[Pattern]) -> List[Pattern]:
         # pattern_list → pattern pattern_list | epsilon
         t = self.lexer.peek(1)
         if t.token_type == TokenType.PATTERN:
-            self.parse_pattern()
-            self.parse_pattern_list()
+            patterns.append(self.parse_pattern())
+            return self.parse_pattern_list(patterns)
         elif t.token_type == TokenType.EXECUTE:
-            return
+            return patterns
         else:
             self.syntax_error()
 
-    def parse_pattern(self):
+        # elements: List[Element] = []
+        # elements.append(self.parse_element())
+        # self.parse_motif_line(elements)
+
+    def parse_pattern(self) -> Pattern:
         # pattern → PATTERN ID LPAREN param_header RPAREN LCBRAC pattern_body RCBRAC
         self.expect(TokenType.PATTERN)
-        self.expect(TokenType.ID)
+        name = self.expect(TokenType.ID).lexeme
         self.expect(TokenType.LPAREN)
-        self.parse_param_header()
+        params = self.parse_param_header()
         self.expect(TokenType.RPAREN)
         self.expect(TokenType.LCBRAC)
-        self.parse_pattern_body()
+        statements = self.parse_pattern_body()
         self.expect(TokenType.RCBRAC)
+        return Pattern(name, params, statements)
 
-    def parse_param_header(self):
+    def parse_param_header(self) -> List[str]:
         # param_header → param_list | epsilon
         t = self.lexer.peek(1)
         if t.token_type == TokenType.ID:
-            self.parse_param_list()
+            return self.parse_param_list()
         elif t.token_type == TokenType.RPAREN:
-            return
+            return []
         else:
             self.syntax_error()
 
-    def parse_param_list(self):
+    def parse_param_list(self) -> List[str]:
         # param_list → ID COMMA param_list | ID
-        self.expect(TokenType.ID)
+        name = self.expect(TokenType.ID).lexeme
         t = self.lexer.peek(1)
         if t.token_type == TokenType.COMMA:
             self.expect(TokenType.COMMA)
-            self.parse_param_list()
+            return [name] + self.parse_param_list()
         elif t.token_type == TokenType.RPAREN:
-            return
+            return [name]
         else:
             self.syntax_error()
     
-    def parse_pattern_body(self):
+    def parse_pattern_body(self) -> List[Statement]:
         # pattern_body → pattern_stmt pattern_body | pattern_stmt
-        self.parse_pattern_stmt()
+        stmt = self.parse_pattern_stmt()
         t = self.lexer.peek(1)
         if t.token_type in {TokenType.KNIT, 
                             TokenType.PURL, 
@@ -110,21 +121,21 @@ class Parser:
                             TokenType.ID, 
                             TokenType.WORK, 
                             TokenType.PRINT}:
-            self.parse_pattern_body()
+            return [stmt] + self.parse_pattern_body()
         elif t.token_type == TokenType.RCBRAC:
-            return
+            return [stmt]
         else:
             self.syntax_error()
 
-    def parse_pattern_stmt(self):
+    def parse_pattern_stmt(self) -> Statement:
         # pattern_stmt → cast_on_stmt | bind_off_stmt | repeat_block | row_stmt | work_stmt | print_stmt
         t = self.lexer.peek(1)
         if t.token_type == TokenType.CAST_ON:
-            self.parse_cast_on_stmt()
+            return self.parse_cast_on_stmt()
         elif t.token_type == TokenType.BIND_OFF:
-            self.parse_bind_off_stmt()
+            return self.parse_bind_off_stmt()
         elif t.token_type == TokenType.REPEAT:
-            self.parse_repeat_block()
+            return self.parse_repeat_block()
         elif t.token_type in {TokenType.KNIT, 
                               TokenType.PURL, 
                               TokenType.KFB, 
@@ -132,58 +143,64 @@ class Parser:
                               TokenType.M1R, 
                               TokenType.SSK, 
                               TokenType.K2TOG, 
-                              TokenType.ID}:
-            self.parse_row_stmt()
+                              TokenType.ID,
+                              TokenType.LPAREN}:
+            return self.parse_row_stmt()
         elif t.token_type == TokenType.WORK:
-            self.parse_work_stmt()
+            return self.parse_work_stmt()
         elif t.token_type == TokenType.PRINT:
-            self.parse_print_stmt()
+            return self.parse_print_stmt()
         else:
             self.syntax_error()
     
-    def parse_cast_on_stmt(self):
+    def parse_cast_on_stmt(self) -> CastOnStmt:
         # cast_on_stmt → CAST_ON expr SEMICOLON
         self.expect(TokenType.CAST_ON)
-        self.parse_expr()
+        expr = self.parse_expr()
         self.expect(TokenType.SEMICOLON)
+        return CastOnStmt(expr)
     
-    def parse_bind_off_stmt(self):
+    def parse_bind_off_stmt(self) -> BindOffStmt:
         # bind_off_stmt → BIND_OFF expr SEMICOLON
         self.expect(TokenType.BIND_OFF)
-        self.parse_expr()
+        expr = self.parse_expr()
         self.expect(TokenType.SEMICOLON)
+        return BindOffStmt(expr)
     
-    def parse_repeat_block(self):
+    def parse_repeat_block(self) -> RepeatStmt:
         # repeat_block → REPEAT expr LCBRAC pattern_body RCBRAC
         self.expect(TokenType.REPEAT)
-        self.parse_expr()
+        times = self.parse_expr()
         self.expect(TokenType.LCBRAC)
-        self.parse_pattern_body()
+        body = self.parse_pattern_body()
         self.expect(TokenType.RCBRAC)
+        return RepeatStmt(times, body)
 
     def parse_row_stmt(self) -> RowStatement:
         # row_stmt → motif_line_list fill_opt SEMICOLON
-        row_stmt = RowStatement()
-        row_stmt.elements = self.parse_motif_line_list()
-        row_stmt.fill = self.parse_fill_opt()
+        elements = self.parse_motif_line_list()
+        fill = self.parse_fill_opt()
         self.expect(TokenType.SEMICOLON)
-        return row_stmt
+        return RowStatement(elements, fill)
     
-    def parse_print_stmt(self):
+    def parse_print_stmt(self) -> PrintStmt:
         # print_stmt → PRINT LPAREN QUOTED_STRING RPAREN SEMICOLON
         self.expect(TokenType.PRINT)
         self.expect(TokenType.LPAREN)
-        self.expect(TokenType.QUOTED_STRING)
+        message = self.expect(TokenType.QUOTED_STRING).lexeme
         self.expect(TokenType.RPAREN)
         self.expect(TokenType.SEMICOLON)
+        return PrintStmt(message)
+
     
-    def parse_execute_stmt(self):
+    def parse_execute_stmt(self) -> PatternCall:
         # execute_stmt → EXECUTE LPAREN pattern_call RPAREN SEMICOLON
         self.expect(TokenType.EXECUTE)
         self.expect(TokenType.LPAREN)
-        self.parse_pattern_call()
+        pattern_call = self.parse_pattern_call()
         self.expect(TokenType.RPAREN)
         self.expect(TokenType.SEMICOLON)
+        return pattern_call
     
     def parse_fill_opt(self) -> bool:
         # fill_opt → fill | epsilon
@@ -196,43 +213,45 @@ class Parser:
         else:
             self.syntax_error()
     
-    def parse_work_stmt(self):
+    def parse_work_stmt(self) -> WorkStmt:
         # work_stmt → WORK LPAREN pattern_call RPAREN SEMICOLON
         self.expect(TokenType.WORK)
         self.expect(TokenType.LPAREN)
-        self.expect(TokenType.ID)
+        pattern_name = self.expect(TokenType.ID).lexeme
         self.expect(TokenType.LPAREN)
-        self.parse_param_list()
+        args = self.parse_param_list()
         self.expect(TokenType.RPAREN)
         self.expect(TokenType.RPAREN)
         self.expect(TokenType.SEMICOLON)
+        return WorkStmt(pattern_name, args)
     
-    def parse_pattern_call(self):
+    def parse_pattern_call(self) -> PatternCall:
         # pattern_call → ID LPAREN arg_list RPAREN
-        self.expect(TokenType.ID)
+        name = self.expect(TokenType.ID).lexeme
         self.expect(TokenType.LPAREN)
-        self.parse_arg_list()
+        args = self.parse_arg_list()
         self.expect(TokenType.RPAREN)
+        return PatternCall(name, args)
     
-    def parse_arg_list(self):
+    def parse_arg_list(self) -> Optional[List[str]]:
         # arg_list → arg | epsilon
         t = self.lexer.peek(1)
         if t.token_type == TokenType.NUM:
-            self.parse_arg()
+            return self.parse_arg()
         elif t.token_type == TokenType.RPAREN:
             return
         else:
             self.syntax_error()
-
-    def parse_arg(self):
+    
+    def parse_arg(self) -> Optional[List[str]]:
         # arg → NUM COMMA arg | NUM
-        self.expect(TokenType.NUM)
+        arg = self.expect(TokenType.NUM).lexeme
         t = self.lexer.peek(1)
         if t.token_type == TokenType.COMMA:
             self.expect(TokenType.COMMA)
-            self.parse_arg()
+            return [arg] + self.parse_arg()
         elif t.token_type == TokenType.RPAREN:
-            return
+            return [arg]
         else:
             self.syntax_error()
     
@@ -324,11 +343,10 @@ class Parser:
     
     def parse_paren_motif(self) -> ParenMotif:
         # paren_motif → LPAREN motif_line_list RPAREN
-        parenMotif = ParenMotif(elements=[])
         self.expect(TokenType.LPAREN)
-        parenMotif.elements = self.parse_motif_line_list()
+        elements = self.parse_motif_line_list()
         self.expect(TokenType.RPAREN)
-        return parenMotif
+        return ParenMotif(elements=elements)
     
     def parse_motif_repeat(self) -> Optional[Expr]:
         # motif_repeat → MULT repeat_count | epsilon

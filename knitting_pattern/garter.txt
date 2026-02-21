@@ -9,7 +9,7 @@ pattern bordered_square(size, border) {
         K border, garter * (width + 1 * (border - 2)), K border;
     }
     repeat border {
-        garter * size;
+        (K 1, P 3, garter) * size;
     }
 
     bind_off size;
