@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List, Literal
+from typing import Dict, List, Literal, Optional
 
 # Expr
 @dataclass(frozen=True)
@@ -56,6 +56,58 @@ class Element:
 class Statement:
     pass
 
+@dataclass(frozen=True)
 class RowStatement(Statement):
     elements: List[Element]
     fill: bool = False
+
+@dataclass(frozen=True)
+class CastOnStmt(Statement):
+    count: Expr
+
+@dataclass(frozen=True)
+class BindOffStmt(Statement):
+    count: Expr
+
+@dataclass(frozen=True)
+class RepeatStmt(Statement):
+    times: Expr
+    body: List[Statement]
+
+@dataclass(frozen=True)
+class WorkStmt(Statement):
+    pattern_name: str
+    args: List[Expr]
+
+@dataclass(frozen=True)
+class PrintStmt(Statement):
+    message: str
+
+
+
+# Pattern and Stitch Definitions
+@dataclass(frozen=True)
+class Pattern:
+    name: str
+    params: List[str]             
+    statements: List[Statement]   
+
+@dataclass(frozen=True)
+class StitchDef:
+    name: str
+    elements: List[Element]
+
+
+# Program data classes
+@dataclass(frozen=True)
+class PatternCall:
+    name: str
+    args: List["Expr"]              
+
+
+@dataclass(frozen=True)
+class Program:
+    stitch_defs: Dict[str, StitchDef]
+    patterns: Dict[str, Pattern]
+    entry: PatternCall               
+    global_width: Optional[int] = None
