@@ -5,6 +5,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import List, Optional
 from parser_models import *
+from interpreter import Interpreter
 
 class Parser:
     def __init__(self, lexer: Lexer):
@@ -21,9 +22,10 @@ class Parser:
             raise SyntaxError(f"Expected token of type {expected_type}, got {token.token_type}")
         return token
     
-    def parse_input(self):
-        self.parse_program()
+    def parse_input(self) -> Program:
+        program = self.parse_program()
         self.expect(TokenType.EOF)
+        return program
 
     def parse_program(self) -> Program:
         # program  → stitch_def_list pattern_list execute_stmt
@@ -75,14 +77,15 @@ class Parser:
         self.expect(TokenType.PATTERN)
         name = self.expect(TokenType.ID).lexeme
         self.expect(TokenType.LPAREN)
-        params = self.parse_param_header()
+        params_exprs = self.parse_param_header()
+        params = [p.name for p in params_exprs]
         self.expect(TokenType.RPAREN)
         self.expect(TokenType.LCBRAC)
         statements = self.parse_pattern_body()
         self.expect(TokenType.RCBRAC)
         return Pattern(name, params, statements)
 
-    def parse_param_header(self) -> List[str]:
+    def parse_param_header(self) -> List[Expr]:
         # param_header → param_list | epsilon
         t = self.lexer.peek(1)
         if t.token_type == TokenType.ID:
@@ -92,13 +95,13 @@ class Parser:
         else:
             self.syntax_error()
 
-    def parse_param_list(self) -> List[str]:
+    def parse_param_list(self) -> List[Expr]:
         # param_list → ID COMMA param_list | ID
-        name = self.expect(TokenType.ID).lexeme
+        name = Var(self.expect(TokenType.ID).lexeme)
         t = self.lexer.peek(1)
         if t.token_type == TokenType.COMMA:
             self.expect(TokenType.COMMA)
-            return [name] + self.parse_param_list()
+            return [name] + Var(self.parse_param_list())
         elif t.token_type == TokenType.RPAREN:
             return [name]
         else:
@@ -214,7 +217,7 @@ class Parser:
             self.syntax_error()
     
     def parse_work_stmt(self) -> WorkStmt:
-        # work_stmt → WORK LPAREN pattern_call RPAREN SEMICOLON
+        # work_stmt → WORK LPAREN param_list RPAREN SEMICOLON
         self.expect(TokenType.WORK)
         self.expect(TokenType.LPAREN)
         pattern_name = self.expect(TokenType.ID).lexeme
@@ -233,7 +236,7 @@ class Parser:
         self.expect(TokenType.RPAREN)
         return PatternCall(name, args)
     
-    def parse_arg_list(self) -> Optional[List[str]]:
+    def parse_arg_list(self) -> Optional[List[Expr]]:
         # arg_list → arg | epsilon
         t = self.lexer.peek(1)
         if t.token_type == TokenType.NUM:
@@ -243,9 +246,9 @@ class Parser:
         else:
             self.syntax_error()
     
-    def parse_arg(self) -> Optional[List[str]]:
-        # arg → NUM COMMA arg | NUM
-        arg = self.expect(TokenType.NUM).lexeme
+    def parse_arg(self) -> Optional[List[Expr]]:
+        # arg → factor COMMA arg | factor
+        arg = self.parse_factor()
         t = self.lexer.peek(1)
         if t.token_type == TokenType.COMMA:
             self.expect(TokenType.COMMA)
@@ -500,7 +503,7 @@ class Parser:
 # add_operator     → PLUS | MINUS
 # term                   → factor term_tail
 # term_tail            → MULT factor term_tail | epsilon
-# factor 		→ NUM | stitch_operator | ID | LPAREN expr RPAREN
+# factor 		→ NUM | ID | LPAREN expr RPAREN
 # stitch_operator  → KNIT | PURL | KFB | M1L | M1R | SSK | K2TOG
 
 
@@ -518,6 +521,10 @@ if __name__ == "__main__":
         ib = InputBuffer(f)
         lexer = Lexer(ib)
         parser = Parser(lexer)
-        parser.parse_input()
+        program = parser.parse_input()
+        interpreter = Interpreter(program)
+        output = interpreter.run_program()
+        for line in output:
+            print(line)
 
     print("Parse OK")

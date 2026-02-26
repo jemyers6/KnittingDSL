@@ -11,7 +11,7 @@ class Expr:
 
 @dataclass(frozen=True)
 class Num(Expr):
-    value: str
+    value: int
 
 
 @dataclass(frozen=True)
@@ -101,10 +101,11 @@ class StitchDef:
 @dataclass(frozen=True)
 class PatternCall:
     name: str
-    args: Optional[List[str]]          
+    args: Optional[List[Expr]]         
 
 @dataclass(frozen=True)
 class Program:
     stitch_defs: List[StitchDef]
     patterns: List[Pattern]
-    entry: PatternCall               
+    entry: PatternCall 
+    global_width: Optional[int] = None
