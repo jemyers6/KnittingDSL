@@ -101,7 +101,7 @@ class Parser:
         t = self.lexer.peek(1)
         if t.token_type == TokenType.COMMA:
             self.expect(TokenType.COMMA)
-            return [name] + Var(self.parse_param_list())
+            return [name] + self.parse_param_list()
         elif t.token_type == TokenType.RPAREN:
             return [name]
         else:
