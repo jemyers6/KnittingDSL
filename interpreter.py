@@ -32,8 +32,14 @@ class Interpreter:
         rows = self._run_pattern(pattern, env)
 
         formatted: List[str] = []
-        for i, row in enumerate(rows):
-            formatted.append(f"ROW {i}: " + " ".join(row))
+        i = 0
+        for row in rows:
+            if "print" in row:
+                cleaned_row = row.replace("print", "")
+                formatted.append(cleaned_row)
+            else:
+                formatted.append(f"ROW {i}: " + " ".join(row))
+                i = i + 1
 
         return formatted
 
@@ -101,8 +107,7 @@ class Interpreter:
             return [["BO"] * count]
 
         if isinstance(stmt, PrintStmt):
-            print(stmt.message)
-            return []
+            return [ "print" + stmt.message]
 
         if isinstance(stmt, WorkStmt):
             pattern_name = stmt.pattern_name
