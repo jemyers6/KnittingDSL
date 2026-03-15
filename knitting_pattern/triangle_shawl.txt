@@ -1,0 +1,10 @@
+pattern shawl(width) {
+	cast_on width;
+	K 1, KFB 1, K 1;
+	repeat 5 {
+		K 1, P [width - 2], K 1;
+		K 1, KFB 1, K [width - 4], KFB 1, K 1;
+	}
+	bind_off width;
+}
+execute(shawl(3));

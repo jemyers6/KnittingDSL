@@ -1,0 +1,9 @@
+stitch rib1x1 = K 1, P 1, K 1;
+pattern swatch12x12(width) {
+	cast_on width;
+	repeat width {
+		rib1x1 fill;
+	}
+	bind_off width;
+}
+execute(swatch12x12(12));
