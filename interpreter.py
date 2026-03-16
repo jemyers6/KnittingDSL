@@ -198,94 +198,29 @@ class Interpreter:
             raise RuntimeErrorEval(f"Unknown operator '{expr.op}'")
         raise RuntimeErrorEval(f"Unknown Expr node {type(expr).__name__}")
 
-    def expand_element(self, element: "Element", env: Env, stack: Optional[List[str]] = None) -> List[str]:
-        n = self.eval_expr(element.repeat, env)
-        if n < 0:
-            raise RuntimeErrorEval(f"Repeat count cannot be negative (got {n})")
-
-        unit = self.expand_motif(element.motif, env, stack)
-
-        if not unit: # if the element was an decrease 
-            return []
-        
-        return unit * n
-    
-    def expand_element_stats(
+    def expand_element(
         self,
         element: "Element",
         env: Env,
         stack: Optional[List[str]] = None
     ) -> Tuple[int, int, List[str]]:
-        """
-        Returns: (consumed, produced, output_stitches)
-        - consumed: how many existing stitches this element uses up
-        - produced: how many new stitches this element creates
-        - output_stitches: list length == produced
-        """
+
         n = self.eval_expr(element.repeat, env)
         if n < 0:
             raise RuntimeErrorEval(f"Repeat count cannot be negative (got {n})")
 
-        c_unit, p_unit, out_unit = self.expand_motif_stats(element.motif, env, stack)
+        c_unit, p_unit, out_unit = self.expand_motif(element.motif, env, stack)
 
         return (c_unit * n, p_unit * n, out_unit * n)
 
-    def expand_motif(
-        self,
-        motif: "Motif",
-        env: "Env",
-        stack: Optional[List[str]] = None
-    ) -> List[str]:
-        if stack is None:
-            stack = []
-
-        if isinstance(motif, StitchMotif):
-            op = motif.op
-
-            match op:
-                case "K" | "P" :
-                    return [op]
-
-                case "M1L" | "M1R" | "KFB":
-                    return ["K", "K"]   # counts as 2 stitches
-
-                case "SSK" | "K2TOG":
-                    return []         # counts as 0 stitches
-                case _:
-                    raise RuntimeErrorEval(f"Unknown stitch operator '{motif.op}'")
-        if isinstance(motif, ParenMotif):
-            out: List[str] = []
-            for el in motif.elements:
-                out.extend(self.expand_element(el, env, stack))
-            return out
-
-        if isinstance(motif, RefMotif):
-            name = motif.name
-            if name not in self.program.stitch_defs:
-                raise RuntimeErrorEval(f"Undefined stitch '{name}'")
-
-            if name in stack:
-                raise RuntimeErrorEval("Cycle in stitch defs: " + " -> ".join(stack + [name]))
-
-            stack.append(name)
-            defn = self.program.stitch_defs[name]  
-            out: List[str] = []
-            for el in defn.elements:
-                out.extend(self.expand_element(el, env, stack))
-            stack.pop()
-            return out
-
-        raise RuntimeErrorEval(f"Unknown motif type: {type(motif).__name__}")
     
-    def expand_motif_stats(
+    def expand_motif(
         self,
         motif: "Motif",
         env: Env,
         stack: Optional[List[str]] = None
     ) -> Tuple[int, int, List[str]]:
-        """
-        Returns: (consumed, produced, output_stitches)
-        """
+
         if stack is None:
             stack = []
 
@@ -310,7 +245,7 @@ class Interpreter:
             p_total = 0
             out: List[str] = []
             for el in motif.elements:
-                c, p, o = self.expand_element_stats(el, env, stack)
+                c, p, o = self.expand_element(el, env, stack)
                 c_total += c
                 p_total += p
                 out.extend(o)
@@ -332,7 +267,7 @@ class Interpreter:
             p_total = 0
             out: List[str] = []
             for el in defn.elements:
-                c, p, o = self.expand_element_stats(el, env, stack)
+                c, p, o = self.expand_element(el, env, stack)
                 c_total += c
                 p_total += p
                 out.extend(o)
@@ -352,7 +287,7 @@ class Interpreter:
         out: List[str] = []
 
         for el in row.elements:
-            c, p, o = self.expand_element_stats(el, env)
+            c, p, o = self.expand_element(el, env)
             consumed += c
             produced += p
             out.extend(o)
@@ -377,7 +312,7 @@ class Interpreter:
             return out
 
         last_el = row.elements[-1]
-        c_unit, p_unit, out_unit = self.expand_element_stats(
+        c_unit, p_unit, out_unit = self.expand_element(
             Element(motif=last_el.motif, repeat=Num(1)),  
             env
         )
