@@ -1,0 +1,11 @@
+
+pattern bordered_square(width) {
+    cast_on width;
+    repeat width {
+        (P 1, K 1) * 5;
+    }
+    
+    bind_off width;
+}
+
+execute(bordered_square(10));

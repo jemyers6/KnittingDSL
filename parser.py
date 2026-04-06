@@ -451,10 +451,10 @@ class Parser:
         # term_tail → MULT factor | epsilon
         t = self.lexer.peek(1)
 
-        if t.token_type == TokenType.MULT:
-            self.consume(TokenType.MULT)
+        if t.token_type == TokenType.MULT or t.token_type == TokenType.DIVIDE:
+            op = self.parse_mult_operator()
             right = self.parse_factor()
-            combined = BinOp("*", left, right)
+            combined = BinOp(op, left, right)
             return self.parse_term_tail(combined)  # recurse to allow a*b*c
 
         elif t.token_type in {
@@ -477,8 +477,10 @@ class Parser:
         t = self.consume({TokenType.PLUS, TokenType.MINUS}, context="add operator")
         return "+" if t.token_type == TokenType.PLUS else "-"
     
-
-
+    def parse_mult_operator(self) -> str:
+    # mult_operator → MULT | DIVIDE
+        t = self.consume({TokenType.MULT, TokenType.DIVIDE}, context="mult operator")
+        return "*" if t.token_type == TokenType.MULT else "/"
 # program             → stitch_def_list pattern_list execute_stmt EOF
 # stitch_def_list    → stitch_def stitch_def_list | epsilon
 # stitch_def           → STITCH ID EQUALS motif_line_list SEMICOLON 

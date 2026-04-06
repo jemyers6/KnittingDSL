@@ -195,6 +195,10 @@ class Interpreter:
                 return a - b
             if expr.op == "*":
                 return a * b
+            if expr.op == "/":
+                if b == 0:
+                    raise RuntimeErrorEval("Division by zero")
+                return a // b
             raise RuntimeErrorEval(f"Unknown operator '{expr.op}'")
         raise RuntimeErrorEval(f"Unknown Expr node {type(expr).__name__}")
 
