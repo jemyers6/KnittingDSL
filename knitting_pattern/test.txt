@@ -1,11 +1,10 @@
 
-pattern bordered_square(width) {
+pattern test(width) {
     cast_on width;
-    repeat width {
-        (P 1, K 1) * 5;
-    }
-    
+
+    (K 1, P 1) * (width - 3), KFB 1;
+
     bind_off width;
 }
 
-execute(bordered_square(10));
+execute(test(5));

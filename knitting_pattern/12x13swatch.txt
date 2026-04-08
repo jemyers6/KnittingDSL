@@ -1,12 +1,12 @@
 stitch rib2x1 = K 1, P 1, K 1;
 stitch rib2x1_ws = P 1, K 1, P 1;
-pattern swatch12x12(width) {
+pattern swatch12x13(width) {
 	cast_on width;
-	repeat width / 2 {
+	repeat width {
 		rib2x1 fill;
 		rib2x1_ws fill;
 	}
 	rib2x1 fill;
 	bind_off width;
 }
-execute(swatch12x12(12));
+execute(swatch12x13(12));

@@ -43,6 +43,7 @@ class Interpreter:
 
         return formatted
 
+    # we use forward references in this project to handle circular dependencies and recursive data structures
     def _bind_call_env(self, call: "PatternCall", pattern: "Pattern") -> Env:
         if len(call.args) != len(pattern.params):
             raise RuntimeErrorEval(
@@ -131,6 +132,7 @@ class Interpreter:
 
         raise RuntimeErrorEval(f"Unimplemented statement type: {type(stmt).__name__}")
     
+    # 
     def _bind_call_env_inherit(self, call: "PatternCall", pattern: "Pattern", caller_env: Env) -> Env:
         if len(call.args) != len(pattern.params):
             raise RuntimeErrorEval(
@@ -239,7 +241,7 @@ class Interpreter:
                     return (1, 2, ["K", "K"])
 
                 case "SSK" | "K2TOG":
-                    return (1, 0, [])
+                    return (2, 1, ["K"])
 
                 case _:
                     raise RuntimeErrorEval(f"Unknown stitch operator '{motif.op}'")
@@ -261,6 +263,7 @@ class Interpreter:
             if stitch_def is None:
                 raise RuntimeErrorEval(f"Unknown stitch definition '{name}'")
 
+            # if you have a stitch def that references itself directly or indirectly, this can cause infinite recurison
             if name in stack:
                 raise RuntimeErrorEval("Cycle in stitch defs: " + " -> ".join(stack + [name]))
 
@@ -270,11 +273,13 @@ class Interpreter:
             c_total = 0
             p_total = 0
             out: List[str] = []
+            print("expand_motif DEBUG width =", env.width)
             for el in defn.elements:
                 c, p, o = self.expand_element(el, env, stack)
                 c_total += c
                 p_total += p
                 out.extend(o)
+                print("  element:", el, "consumes", c, "produces", p)
 
             stack.pop()
             return (c_total, p_total, out)
@@ -290,11 +295,13 @@ class Interpreter:
         produced = 0
         out: List[str] = []
 
+        print("eval_row_statement DEBUG width =", env.width)
         for el in row.elements:
             c, p, o = self.expand_element(el, env)
             consumed += c
             produced += p
             out.extend(o)
+            print("  element:", el, "consumes", c, "produces", p)
 
         if consumed > env.width:
              raise RuntimeErrorEval(

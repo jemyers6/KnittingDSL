@@ -135,7 +135,8 @@ class Parser:
                             TokenType.REPEAT, 
                             TokenType.ID, 
                             TokenType.WORK, 
-                            TokenType.PRINT}:
+                            TokenType.PRINT,
+                            TokenType.LPAREN}:
             return [stmt] + self.parse_pattern_body()
         elif t.token_type == TokenType.RCBRAC:
             return [stmt]
